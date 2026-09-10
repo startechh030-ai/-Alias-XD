@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "id": "model-import",
+  "name": "Model Import",
+  "description": "Drop an FBX, OBJ or glTF and start from that mesh.",
+  "kind": "model-import",
+  "icon": "cube-plus",
+  "tags": ["starter", "import"],
+  "copy": ["README.md"],
+  "scene": {
+    "upAxis": "z",
+    "gridSize": 16.0,
+    "gridSnap": 0.1,
+    "render": { "backend": "auto", "hdr": true, "msaa": 4 },
+    "physics": { "enabled": false }
+  }
+}

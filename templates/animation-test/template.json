@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "id": "animation-test",
+  "name": "Animation Test",
+  "description": "A rigged mesh and one clip, camera locked to it.",
+  "kind": "animation-test",
+  "icon": "play",
+  "tags": ["starter", "animation"],
+  "copy": [],
+  "scene": {
+    "upAxis": "y",
+    "gridSize": 8.0,
+    "gridSnap": 0.05,
+    "fps": 30.0,
+    "render": { "backend": "auto", "hdr": true, "msaa": 4, "fov": 45.0 },
+    "physics": { "enabled": false }
+  }
+}

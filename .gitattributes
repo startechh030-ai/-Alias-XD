@@ -1,0 +1,19 @@
+# Line endings: source stays LF in the repo, checked-out LF for tooling on all three OSes.
+* text=auto eol=lf
+
+*.sh  text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Never let a diff or a merge touch binary assets.
+*.png binary
+*.jpg binary
+*.ktx2 binary
+*.glb binary
+*.fbx binary
+*.obj text
+*.mtl text
+
+# Generated / vendored content is not reviewed.
+external/** linguist-vendored
+assets/vendor/** linguist-vendored

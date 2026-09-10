@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "id": "empty-scene",
+  "name": "Empty Scene",
+  "description": "One camera, one light, a floor grid. Nothing else.",
+  "kind": "generic3d",
+  "icon": "cube",
+  "tags": ["starter"],
+  "copy": [],
+  "scene": {
+    "upAxis": "y",
+    "gridSize": 10.0,
+    "gridSnap": 0.25,
+    "fps": 60.0,
+    "render": { "backend": "auto", "hdr": true, "msaa": 4 },
+    "physics": { "enabled": false }
+  }
+}

@@ -1,0 +1,39 @@
+# The workspace stores code and assets only. Nothing built belongs here.
+build/
+build-*/
+out/
+cmake-build*/
+CMakeUserPresets.json
+
+# Caches left by third-party fetches
+_cache/
+_deps/
+vcpkg_installed/
+.claude/
+
+# Vendored third-party sources (added per-step, see external/README.md)
+external/filament/
+external/imgui/
+external/stb/
+external/libigl/
+external/jolt/
+
+# Local project state that must not be committed
+projects/*/meta.json
+*.lume-lock
+autosave/
+
+# Editor / OS noise
+.vs/
+.vscode/
+.idea/
+*.user
+.DS_Store
+Thumbs.db
+
+# Android
+tools/android/.gradle/
+tools/android/**/build/
+tools/android/**/local.properties
+*.apk
+*.aab

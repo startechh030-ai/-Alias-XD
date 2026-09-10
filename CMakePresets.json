@@ -1,0 +1,75 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 24, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "LUME_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "ci-linux",
+      "displayName": "Linux (host, headless) - Ninja",
+      "inherits": "base",
+      "generator": "Ninja",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    },
+    {
+      "name": "dev-linux-debug",
+      "displayName": "Linux debug + warnings as errors",
+      "inherits": "ci-linux",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "LUME_WARNINGS_AS_ERRORS": "ON"
+      }
+    },
+    {
+      "name": "ci-windows",
+      "displayName": "Windows (host, headless) - VS 2022",
+      "inherits": "base",
+      "generator": "Visual Studio 17 2022",
+      "architecture": { "value": "x64", "strategy": "set" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "android-arm64",
+      "displayName": "Android arm64-v8a (core + hub logic, static)",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME": "Android",
+        "CMAKE_ANDROID_ARCH_ABI": "arm64-v8a",
+        "CMAKE_ANDROID_STL_TYPE": "c++_static",
+        "ANDROID_PLATFORM": "android-26",
+        "ANDROID_STL": "c++_static",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "LUME_BUILD_TESTS": "OFF",
+        "LUME_BUILD_HUB": "ON"
+      },
+      "toolchainFile": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake"
+    }
+  ],
+  "buildPresets": [
+    { "name": "ci-linux", "configurePreset": "ci-linux" },
+    { "name": "dev-linux-debug", "configurePreset": "dev-linux-debug" },
+    { "name": "ci-windows", "configurePreset": "ci-windows", "configuration": "Release" },
+    { "name": "android-arm64", "configurePreset": "android-arm64" }
+  ],
+  "testPresets": [
+    {
+      "name": "ci-linux",
+      "configurePreset": "ci-linux",
+      "output": { "outputOnFailure": true, "verbosity": "verbose" }
+    },
+    {
+      "name": "ci-windows",
+      "configurePreset": "ci-windows",
+      "configuration": "Release",
+      "output": { "outputOnFailure": true, "verbosity": "verbose" }
+    }
+  ]
+}

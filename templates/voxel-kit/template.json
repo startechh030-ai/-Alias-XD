@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "id": "voxel-kit",
+  "name": "Voxel Kit",
+  "description": "Snap-to-grid on, small triangles, built for blocky output.",
+  "kind": "voxel-kit",
+  "icon": "grid",
+  "tags": ["starter", "mobile"],
+  "copy": ["README.md"],
+  "scene": {
+    "upAxis": "y",
+    "gridSize": 16.0,
+    "gridSnap": 1.0,
+    "fps": 60.0,
+    "autosave": true,
+    "autosaveMinutes": 2,
+    "render": { "backend": "opengl", "hdr": false, "msaa": 2 },
+    "physics": { "enabled": false }
+  }
+}

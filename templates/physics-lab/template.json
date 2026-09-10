@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "id": "physics-lab",
+  "name": "Physics Lab",
+  "description": "Gravity on, a ground plane and a stack of boxes to knock over.",
+  "kind": "physics-lab",
+  "icon": "gravity",
+  "tags": ["starter", "physics"],
+  "copy": ["README.md"],
+  "scene": {
+    "upAxis": "y",
+    "gridSize": 10.0,
+    "gridSnap": 0.25,
+    "fps": 60.0,
+    "physics": {
+      "enabled": true,
+      "gravity": [0.0, -9.81, 0.0],
+      "fixedHz": 60.0,
+      "solver": "builtin",
+      "restitution": 0.15
+    },
+    "render": { "backend": "auto", "hdr": true, "msaa": 4 }
+  }
+}
