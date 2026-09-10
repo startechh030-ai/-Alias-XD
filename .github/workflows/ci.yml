@@ -1,0 +1,243 @@
+name: ci
+
+# Step 1 builds and tests the hub / project system on the three shipped platforms.
+# Nothing here needs a GPU, an emulator, or a Filament archive - that arrives in step 2.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: "3"   # keep the 16 GB runner from swapping on Filament-era builds
+
+jobs:
+  host-tests:
+    name: core + hub (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            preset: ci-linux
+            exe: build/ci-linux/bin/lume-hub
+          - os: windows-latest
+            preset: ci-windows
+            exe: build/ci-windows/bin/Release/lume-hub.exe
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tool versions
+        shell: bash
+        run: |
+          cmake --version
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then ninja --version; fi
+          "${{ matrix.exe }}" --version || true
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }} -DLUME_WARNINGS_AS_ERRORS=OFF
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Unit tests
+        run: ctest --preset ${{ matrix.preset }} --output-on-failure
+
+      - name: Hub smoke - create, open, print
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Relative paths on purpose: what Git Bash calls /tmp and what an MSVC binary calls
+          # /tmp are different directories, and the smoke test would then read a tree the hub
+          # never wrote. Inside the build dir both sides agree.
+          DATA="build/${{ matrix.preset }}/hub-smoke"
+          HUB="${{ matrix.exe }}"
+          rm -rf "$DATA"; mkdir -p "$DATA"
+
+          "$HUB" --projects-dir "$DATA" --templates-dir templates --list-templates
+          "$HUB" --projects-dir "$DATA" --templates-dir templates \
+            --new "CI Smoke" --template empty-scene --print
+
+          SRC=$(find "$DATA/projects" -maxdepth 1 -type d -name 'ci-smoke-????????' | head -1)
+          test -n "$SRC" || { echo "no project folder was created" >&2; exit 1; }
+          test -f "$SRC/project.json"
+          "$HUB" --projects-dir "$DATA" --validate "$SRC"
+          "$HUB" --projects-dir "$DATA" --open "$SRC" --print
+          echo "--- manifest on disk ---"
+          cat "$SRC/project.json"
+          echo "--- recent list ---"
+          cat "$DATA/recent.json"
+
+      - name: Hub smoke - duplicate, rename, then trash
+        shell: bash
+        run: |
+          set -euo pipefail
+          DATA="build/${{ matrix.preset }}/hub-smoke"
+          HUB="${{ matrix.exe }}"
+          SRC=$(find "$DATA/projects" -maxdepth 1 -type d -name 'ci-smoke-????????' | head -1)
+          test -n "$SRC"
+
+          "$HUB" --projects-dir "$DATA" --duplicate "$SRC" --as "CI Smoke Dup"
+          DUP=$(find "$DATA/projects" -maxdepth 1 -type d -name 'ci-smoke-dup-*' | head -1)
+          test -n "$DUP" || { echo "duplicate did not appear" >&2; exit 1; }
+          test -d "$SRC" || { echo "duplicating must not disturb the source" >&2; exit 1; }
+
+          "$HUB" --projects-dir "$DATA" --rename "$SRC" --as "CI Smoke Renamed"
+          "$HUB" --projects-dir "$DATA" --dump "$SRC" | grep -q '"name": "CI Smoke Renamed"'
+
+          "$HUB" --projects-dir "$DATA" --delete "$SRC"
+          test ! -d "$SRC" || { echo "project survived deletion" >&2; exit 1; }
+          test -d "$DUP" || { echo "deleting one project must not take its neighbour" >&2; exit 1; }
+          find "$DATA/trash" -maxdepth 1 -type d -name 'ci-smoke-renamed-*' | grep -q . || {
+            echo "nothing landed in the trash" >&2; exit 1; }
+
+          echo "--- hub after mutations ---"
+          "$HUB" --projects-dir "$DATA" --tab projects --print
+
+      - name: Hub smoke - a corrupt project is skipped, not fatal
+        shell: bash
+        run: |
+          set -euo pipefail
+          DATA="build/${{ matrix.preset }}/hub-smoke"
+          HUB="${{ matrix.exe }}"
+          mkdir -p "$DATA/projects/not-a-project"
+          "$HUB" --projects-dir "$DATA" --validate "$DATA/projects/not-a-project" && {
+            echo "an empty folder validated as a project" >&2; exit 1; }
+          mkdir -p "$DATA/projects/corrupt"
+          echo '{ this is not json' > "$DATA/projects/corrupt/project.json"
+          "$HUB" --projects-dir "$DATA" --validate "$DATA/projects/corrupt" && {
+            echo "a corrupt manifest validated as a project" >&2; exit 1; }
+          # The hub still lists the healthy project instead of dying on the bad one.
+          "$HUB" --projects-dir "$DATA" --tab projects --print | grep -q "CI Smoke Dup"
+
+      - name: Upload ctest log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-${{ matrix.os }}
+          path: build/${{ matrix.preset }}/Testing/Temporary/
+          if-no-files-found: ignore
+
+  android:
+    name: android arm64 (core + hub logic)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      - name: Install NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "ndk;27.0.12077973"
+          log-accepted-android-sdk-licenses: "false"
+
+      - name: Point the preset at it
+        run: echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: cmake --preset android-arm64
+
+      - name: Build the libraries the APK will link
+        run: cmake --build --preset android-arm64
+
+      - name: Prove the objects are really aarch64
+        run: |
+          set -euo pipefail
+          ls -l build/android-arm64/lib/
+          ar p build/android-arm64/lib/liblume_core.a project.cpp.o > /tmp/probe.o
+          python3 - /tmp/probe.o <<'PY'
+          import struct, sys
+          head = open(sys.argv[1], "rb").read(20)
+          assert head[:4] == b"\x7fELF", "not an ELF object"
+          assert head[4] == 2, "not ELF64"
+          machine = struct.unpack("<H", head[18:20])[0]
+          assert machine == 183, f"e_machine={machine}, expected 183 (EM_AARCH64)"
+          print("lume_core objects are ELF64 / AArch64")
+          PY
+
+      - name: No executables for a hub that has no window yet
+        run: |
+          if compgen -G "build/android-arm64/bin/*" > /dev/null; then
+            echo "unexpected binaries:"; ls -l build/android-arm64/bin; exit 1
+          fi
+
+  guardrails:
+    name: build-system guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Step 2 options must fail loudly, not half-build
+        run: |
+          set -euo pipefail
+          if cmake -S . -B /tmp/lume-bad -DLUME_ENABLE_FILAMENT=ON 2> /tmp/lume-bad.log; then
+            echo "Filament configured with no dist dir - that is wrong" >&2; exit 1
+          fi
+          grep -qi "LUME_FILAMENT_DIST_DIR" /tmp/lume-bad.log || {
+            echo "error message does not tell the user what to do:"; cat /tmp/lume-bad.log; exit 1; }
+          if cmake -S . -B /tmp/lume-bad2 -DLUME_ENABLE_IMGUI=ON 2> /tmp/lume-bad2.log; then
+            echo "ImGui configured with no sources - that is wrong" >&2; exit 1
+          fi
+          grep -qi "imgui.h" /tmp/lume-bad2.log || { echo "unhelpful imgui error"; exit 1; }
+
+      - name: A project directory is the unit of work - verify the manifest keys
+        run: |
+          set -euo pipefail
+          for f in templates/*/template.json; do
+            echo "checking $f"
+            python3 - "$f" <<'PY'
+          import json,sys
+          d = json.load(open(sys.argv[1]))
+          for key in ("schema", "id", "name", "kind", "description", "icon", "tags"):
+              assert key in d, f"{sys.argv[1]}: missing {key}"
+          assert d["schema"] == 1, f"{sys.argv[1]}: unexpected schema"
+          assert isinstance(d["tags"], list), f"{sys.argv[1]}: tags must be a list"
+          PY
+          done
+
+  style:
+    name: clang-format (informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true    # becomes a required check once the tree has had one format pass
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install clang-format==18.1.8
+      - name: Check
+        run: |
+          set -euo pipefail
+          files=$(find core hub tests -name '*.cpp' -o -name '*.hpp' | sort)
+          # shellcheck disable=SC2086
+          clang-format --dry-run -Werror $files | tee format.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: format-report
+          path: format.log
+          if-no-files-found: ignore
+
+  summary:
+    name: step 1 gate
+    needs: [host-tests, android, guardrails]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Everything except style must be green
+        run: |
+          set -euo pipefail
+          echo "host-tests=${{ needs.host-tests.result }}"
+          echo "android=${{ needs.android.result }}"
+          echo "guardrails=${{ needs.guardrails.result }}"
+          test "${{ needs.host-tests.result }}" = "success"
+          test "${{ needs.android.result }}" = "success"
+          test "${{ needs.guardrails.result }}" = "success"
